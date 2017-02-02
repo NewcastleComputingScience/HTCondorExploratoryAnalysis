@@ -1,0 +1,80 @@
+---
+title: "HTCondor ML Exploration"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+
+htcondor_datasetForNoura <- read.csv("~/Desktop/Backup/htcondor_datasetForNoura.csv", header=FALSE)
+
+```
+
+In this RMarkdown document I provide some quick insights into the HTCondor trace.
+
+## Structure of the dataset
+The output below shows the structure of the `data.table` we're dealing with.
+
+
+```{r cars}
+colnames(htcondor_datasetForNoura) <- c("ClusterID", "ProcID", "QDate", "JobCurrentStartDate", "EnteredCurrentStatus", "Duration", "Owner", "User", "Command", "Args", "JobStatus", "ImageSize")
+head(htcondor_datasetForNoura)
+
+```
+
+## Distinct jobs by user
+
+For each user in the trace log, we show `totalJobs`, the number of jobs submitted to the HTCondor system. `distinctCommand` shows the number of distinct commands run by that user. `jobsPerCommand` shows the average number of jobs in the trace for that user and command. We should consider this as a worst case, as multiple users in the trace may run common workloads.
+
+```{r distinct1, echo=TRUE}
+
+htcondor_datasetForNoura %>%
+  dplyr::group_by(Owner) %>%
+  dplyr::summarise(totalJobs = n(), distinctCommand = n_distinct(Command), jobsPerCommand = n() / n_distinct(Command))
+```
+
+If we consider just the command name or executable name within `Command`, we can see that many users TODO
+
+```{r distinct2, echo=TRUE}
+htcondor_datasetForNoura$CommandLast <- sapply(strsplit(as.character(htcondor_datasetForNoura$Command), "/"), tail, 1)
+
+htcondor_datasetForNoura %>%
+  dplyr::group_by(Owner) %>%
+  dplyr::summarise(totalJobs = n(), distinctCommandLast = n_distinct(CommandLast), jobsPerCommand = n() / n_distinct(CommandLast))
+
+#htcondor_datasetForNoura %>%
+#  dplyr::filter(V7 == 'fanar')
+
+#htcondor_datasetForNoura %>%
+#  dplyr::filter(V7 == 'n2432912') %>%
+#  dplyr::distinct(V9)
+
+a <- htcondor_datasetForNoura %>%
+#  dplyr::filter(V7 == 'n2432912') %>%
+  dplyr::filter(Owner != 'fanar') %>%
+  dplyr::filter(Owner != 'nasm3') %>%
+ # dplyr::group_by(V7,V9,V10) %>%
+  dplyr::summarise(unique_types = n())
+  
+a
+
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## Failure rates by user
+
+Another observation, which may be valuable in generating synthetic traces, is that the number of miscreant (failing) jobs varies from user-to-user.
+
+In the summary table below, I show the percentage of good jobs for each user within the system. We see Steve (`nasm3`) to be a very strong candidate in that regard! ;)
+```{r failure, echo=TRUE}
+
+b <- htcondor_datasetForNoura %>%
+  dplyr::group_by(Owner) %>%
+  #dplyr::filter(JobStatus == 4) %>%
+  dplyr::summarise(CompletedJob = sum(JobStatus == 4), RemovedJob = sum(JobStatus == 3), PercentageGoodJobs = (100/(RemovedJob+CompletedJob))*CompletedJob)
+b
+
+
+```
